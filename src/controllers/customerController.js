@@ -331,86 +331,52 @@ export const getReviews = asyncHandler(async (req, res) => {
     res.json({ success: true, data: reviews });
 });
 
-// @desc    Search servians
-// @route   GET /api/customer/search/servians
-// @access  Private (Customer only)
+
+
 export const searchServians = asyncHandler(async (req, res) => {
-    const {
-        category,
-        location,
-        radius = 10,
-        minRating = 0,
-        maxPrice,
-        available = true,
-        page = 1,
-        limit = 10
-    } = req.query;
+    const { category, location, available = 'false' } = req.query;
+    const query = { isVerified: true };
 
-    let query = { isVerified: true };
+    if (category) query.serviceCategory = category;
+    if (available === 'true') query['availability.status'] = 'AVAILABLE';
 
-    // Filter by category
-    if (category) {
-        query.serviceCategory = category;
-    }
+    try {
+        let servians;
 
-    // Filter by availability
-    if (available === 'true') {
-        query['availability.status'] = 'AVAILABLE';
-    }
+        if (location) {
+            const [lat, lng] = location.split(',').map(Number);
+            if (!isNaN(lat) && !isNaN(lng) && typeof Servian.findNearbyServians === 'function') {
+                servians = await Servian.findNearbyServians(lat, lng, 10, category);
+            } else {
+                servians = await Servian.find(query).limit(20);
+            }
+        } else {
+            servians = await Servian.find(query).limit(20);
+        }
 
-    // Filter by minimum rating
-    if (minRating > 0) {
-        query.averageRating = { $gte: Number(minRating) };
-    }
+        const serviansData = servians.map(s => ({
+            _id: s._id,
+            name: s.name,
+            serviceCategory: s.serviceCategory,
+            averageRating: s.averageRating || 0,
+            profileImage: s.profileImage,
+            availability: s.availability,
+            isVerified: s.isVerified,
+        }));
 
-    // Filter by maximum price
-    if (maxPrice) {
-        query['pricing.hourlyRate'] = { $lte: Number(maxPrice) };
-    }
-
-    let servians;
-
-    // Location-based search
-    if (location) {
-        const [latitude, longitude] = location.split(',').map(Number);
-        servians = await Servian.findNearbyServians(latitude, longitude, radius, category);
-    } else {
-        servians = await Servian.find(query)
-            .select('-password -otp -otpExpires')
-            .sort({ averageRating: -1, totalReviews: -1 });
-    }
-
-    // Apply additional filters if not using location search
-    if (!location) {
-        servians = servians.filter(servian => {
-            if (minRating > 0 && servian.averageRating < minRating) return false;
-            if (maxPrice && servian.pricing.hourlyRate > maxPrice) return false;
-            return true;
+        res.json({
+            success: true,
+            data: { servians: serviansData, total: serviansData.length }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Something went wrong.',
         });
     }
-
-    // Pagination
-    const total = servians.length;
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + Number(limit);
-    const paginatedServians = servians.slice(startIndex, endIndex);
-
-    const pagination = {
-        currentPage: Number(page),
-        totalPages: Math.ceil(total / limit),
-        total,
-        hasNext: endIndex < total,
-        hasPrev: page > 1
-    };
-
-    res.json({
-        success: true,
-        data: {
-            servians: paginatedServians,
-            pagination
-        }
-    });
 });
+
+
 
 // @desc    Get servian details
 // @route   GET /api/customer/servians/:id
@@ -450,7 +416,6 @@ export const getServianDetails = asyncHandler(async (req, res) => {
 // @access  Private (Customer only)
 export const addToFavorites = asyncHandler(async (req, res) => {
     const { servianId } = req.params;
-    const { notes } = req.body;
 
     const customer = await Customer.findById(req.user.id);
     const servian = await Servian.findById(servianId);
@@ -465,14 +430,15 @@ export const addToFavorites = asyncHandler(async (req, res) => {
         throw new Error('Servian not found');
     }
 
-    await customer.addToFavorites(servianId, notes);
+    await customer.addToFavorites(servianId);
 
     res.json({
         success: true,
         message: 'Servian added to favorites',
-        data: { servianId, notes }
+        data: { servianId }
     });
 });
+
 
 // @desc    Remove servian from favorites
 // @route   DELETE /api/customer/favorites/:servianId

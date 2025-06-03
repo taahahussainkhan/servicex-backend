@@ -1,4 +1,5 @@
 import Servian from '../models/Servian.js';
+import Customer from '../models/Customer.js'; // Add this import
 import asyncHandler from 'express-async-handler';
 import Booking from '../models/bookingModel.js';
 import Review from '../models/reviewModel.js';
@@ -46,8 +47,6 @@ export const getDashboardData = asyncHandler(async (req, res) => {
 
   res.json({ success: true, data: dashboardData });
 });
-
-
 
 // @desc    Update servian profile
 // @route   PUT /api/servian/profile
@@ -186,7 +185,9 @@ export const getReviews = asyncHandler(async (req, res) => {
     throw new Error('Servian not found');
   }
 
-  const reviews = await Review.find({ servian: req.user.id }).sort({ createdAt: -1 });
+  const reviews = await Review.find({ servian: req.user.id })
+    .populate('customer', 'name profileImage') // Populate customer details
+    .sort({ createdAt: -1 });
 
   res.json({
     success: true,
@@ -197,7 +198,6 @@ export const getReviews = asyncHandler(async (req, res) => {
     }
   });
 });
-
 
 // @desc    Get servian bookings
 // @route   GET /api/servian/bookings
@@ -210,6 +210,7 @@ export const getBookings = asyncHandler(async (req, res) => {
 
   const totalBookings = await Booking.countDocuments(query);
   const bookings = await Booking.find(query)
+    .populate('customer', 'name phone profileImage') // Populate customer details
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
     .limit(Number(limit));
@@ -303,8 +304,5 @@ export const markNotificationRead = asyncHandler(async (req, res) => {
       notificationId: id,
       isRead: true
     }
-  })
+  });
 });
-
-
-

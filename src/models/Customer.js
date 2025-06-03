@@ -32,19 +32,18 @@ const customerSchema = new mongoose.Schema({
       }
     },
     isDefault: { type: Boolean, default: false },
-    instructions: String // Special delivery/access instructions
+    instructions: String 
   }],
   
-  // Default address (backward compatibility)
+
   address: String,
   
-  // Service Requests
+
   serviceRequests: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: "ServiceRequest"
   }],
-  
-  // Booking History
+
   bookings: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: "Booking"
@@ -83,7 +82,7 @@ const customerSchema = new mongoose.Schema({
     }
   },
   
-  // Customer Statistics
+
   customerStats: {
     totalBookings: { type: Number, default: 0 },
     completedBookings: { type: Number, default: 0 },
@@ -114,29 +113,28 @@ const customerSchema = new mongoose.Schema({
       enum: ['card', 'bank', 'wallet'],
       required: true
     },
-    provider: String, // Visa, MasterCard, JazzCash, EasyPaisa, etc.
+    provider: String, 
     last4Digits: String,
     isDefault: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
     addedAt: { type: Date, default: Date.now }
   }],
   
-  // Favorite Servians
+ 
   favoriteServians: [{
     servian: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Servian',
+      ref: 'User', 
       required: true
     },
     addedAt: { type: Date, default: Date.now },
     notes: String
   }],
   
-  // Blocked Servians
   blockedServians: [{
     servian: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Servian',
+      ref: 'User', 
       required: true
     },
     reason: String,
@@ -146,14 +144,14 @@ const customerSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes for better query performance
+
 customerSchema.index({ 'addresses.coordinates': '2dsphere' });
 customerSchema.index({ customerTier: 1 });
 customerSchema.index({ 'customerStats.totalBookings': -1 });
 customerSchema.index({ loyaltyPoints: -1 });
 customerSchema.index({ totalSpent: -1 });
 
-// Virtual for customer level based on bookings
+
 customerSchema.virtual('experienceLevel').get(function() {
   const bookings = this.customerStats.totalBookings;
   if (bookings >= 50) return 'Expert';
@@ -162,21 +160,21 @@ customerSchema.virtual('experienceLevel').get(function() {
   return 'New';
 });
 
-// Virtual for completion rate
+
 customerSchema.virtual('completionRate').get(function() {
   const total = this.customerStats.totalBookings;
   const completed = this.customerStats.completedBookings;
   return total > 0 ? Math.round((completed / total) * 100) : 0;
 });
 
-// Virtual for default address
+
 customerSchema.virtual('defaultAddress').get(function() {
   return this.addresses.find(addr => addr.isDefault) || this.addresses[0];
 });
 
-// Pre-save middleware to update customer tier
+
 customerSchema.pre('save', function(next) {
-  // Update customer tier based on total spent
+
   if (this.totalSpent >= 50000) {
     this.customerTier = 'Platinum';
   } else if (this.totalSpent >= 25000) {
@@ -187,7 +185,7 @@ customerSchema.pre('save', function(next) {
     this.customerTier = 'Bronze';
   }
   
-  // Calculate average booking value
+
   if (this.customerStats.totalBookings > 0) {
     this.customerStats.averageBookingValue = Math.round(
       this.totalSpent / this.customerStats.totalBookings

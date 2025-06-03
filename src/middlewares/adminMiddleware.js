@@ -19,7 +19,7 @@ const adminMiddleware = async (req, res, next) => {
       return res.status(403).json({ message: 'Forbidden: Admins only' });
     }
 
-    req.user = user; // pass user info to next middleware/route handler
+    req.user = user; 
     next();
   } catch (error) {
     return res.status(401).json({ message: 'Unauthorized: Invalid token', error: error.message });

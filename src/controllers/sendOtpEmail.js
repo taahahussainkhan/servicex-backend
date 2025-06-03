@@ -1,5 +1,4 @@
-
-import User from "../models/User.js";
+import OTPVerification from "../models/OTPVerification.js"; 
 import sendOtpEmail from "../utils/sendEmail.js";
 
 export const sendOtpToEmail = async (req, res) => {
@@ -11,12 +10,14 @@ export const sendOtpToEmail = async (req, res) => {
   try {
     await sendOtpEmail(email, otp);
 
-    await User.updateOne(
+    
+    await OTPVerification.updateOne(
       { email },
       {
         email,
         otp,
-        otpExpires: Date.now() + 10 * 60 * 1000,
+        otpExpires: Date.now() + 10 * 60 * 1000, 
+        isEmailVerified: false
       },
       { upsert: true }
     );
@@ -32,15 +33,16 @@ export const verifyOtpForEmail = async (req, res) => {
   const { email, otp } = req.body;
 
   try {
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: "User not found" });
+    
+    const otpRecord = await OTPVerification.findOne({ email });
+    if (!otpRecord) return res.status(404).json({ message: "OTP not found" });
 
-    if (user.otp !== otp || user.otpExpires < Date.now()) {
+    if (otpRecord.otp !== otp || otpRecord.otpExpires < Date.now()) {
       return res.status(400).json({ message: "Invalid or expired OTP" });
     }
 
-    // Use updateOne instead of save() to avoid validation issues
-    await User.updateOne(
+    
+    await OTPVerification.updateOne(
       { email },
       {
         $set: { isEmailVerified: true },
@@ -48,9 +50,25 @@ export const verifyOtpForEmail = async (req, res) => {
       }
     );
 
-    res.status(200).json({ message: "Email verified successfully" });
+    res.status(200).json({ 
+      message: "Email verified successfully", 
+      success: true 
+    });
   } catch (error) {
     console.error("OTP verification failed:", error);
     res.status(500).json({ message: "Failed to verify OTP" });
+  }
+};
+
+
+export const isEmailVerified = async (email) => {
+  try {
+    const otpRecord = await OTPVerification.findOne({ 
+      email, 
+      isEmailVerified: true 
+    });
+    return !!otpRecord;
+  } catch (error) {
+    return false;
   }
 };

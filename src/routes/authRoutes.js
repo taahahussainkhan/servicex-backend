@@ -1,5 +1,5 @@
 import express from "express";
-import { registerUser, loginUser } from "../controllers/authController.js";
+import { registerUser, loginUser, cleanupUnverifiedAccounts } from "../controllers/authController.js";
 import upload from "../middlewares/uploadMiddleware.js";
 import { sendOtpToPhone, verifyOtpForPhone } from "../controllers/sendOTPToPhone.js";
 import { sendOtpToEmail, verifyOtpForEmail } from "../controllers/sendOtpEmail.js";
@@ -15,6 +15,7 @@ router.post(
     ]),
     registerUser
   );
+router.post('/cleanup-unverified', cleanupUnverifiedAccounts);
 router.post("/login", loginUser);
 // router.post("/send-otp", sendOtpToPhone);
 // router.post("/verify-otp", verifyOtpForPhone);

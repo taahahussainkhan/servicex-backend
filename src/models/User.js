@@ -10,7 +10,6 @@ const userSchema = new mongoose.Schema({
   password: { 
     type: String, 
     required: true
-    // Remove select: false to make it always available
   },
   phone: {
     type: String,
@@ -42,11 +41,9 @@ const userSchema = new mongoose.Schema({
   rejectedAt: {
     type: Date
   },
-  // Profile images - make them not required initially to avoid validation issues
   profileImage: { 
     type: String, 
     required: function() {
-      // Only required if user is being verified (not during rejection)
       return this.isVerified && !this.isRejected;
     }
   },
@@ -62,7 +59,12 @@ const userSchema = new mongoose.Schema({
       return this.isVerified && !this.isRejected;
     }
   },
-  location: String,
+  // location: String,
+  location: {
+    area: String,
+    street: String,
+    city: String
+  },
   
   // Admin tracking
   verifiedBy: {

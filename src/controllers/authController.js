@@ -20,17 +20,17 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    // 🔥 ADD EMAIL VERIFICATION CHECK HERE
+
     console.log("🔍 Checking email verification for:", email);
-    const otpRecord = await OTPVerification.findOne({ 
-      email: email.trim().toLowerCase(), 
-      isEmailVerified: true 
+    const otpRecord = await OTPVerification.findOne({
+      email: email.trim().toLowerCase(),
+      isEmailVerified: true
     });
 
     if (!otpRecord) {
       console.log("❌ Email not verified for:", email);
-      return res.status(400).json({ 
-        message: "Email must be verified before registration. Please verify your email first." 
+      return res.status(400).json({
+        message: "Email must be verified before registration. Please verify your email first."
       });
     }
     console.log("✅ Email verification confirmed for:", email);
@@ -58,7 +58,7 @@ export const registerUser = async (req, res) => {
       } else {
         // Delete the unverified account and allow re-registration
         console.log("🗑️ Deleting unverified account to allow re-registration");
-        
+
         // Delete from the appropriate collection
         if (userExists.role === 'customer') {
           await Customer.findByIdAndDelete(userExists._id);
@@ -67,7 +67,7 @@ export const registerUser = async (req, res) => {
         } else {
           await User.findByIdAndDelete(userExists._id);
         }
-        
+
         console.log("✅ Unverified account deleted, proceeding with new registration");
       }
     }
@@ -81,18 +81,21 @@ export const registerUser = async (req, res) => {
       profileImage: profileImgUrl,
       cnicFront: cnicFrontUrl,
       cnicBack: cnicBackUrl,
-      isEmailVerified: true, // Set this to true since we verified it
+      isEmailVerified: true,
+      location: req.body.location && typeof req.body.location === 'string'
+        ? JSON.parse(req.body.location)
+        : req.body.location
     };
 
     let user;
     if (role === "customer") {
-      const { address } = req.body; // Optional field for customers
+      const { address } = req.body;
       user = await Customer.create({
         ...userData,
-        address: address ? address.trim() : undefined
+
       });
     } else if (role === "servian") {
-      const { experienceYears, skills } = req.body; // Required fields for servians
+      const { experienceYears, skills } = req.body;
       if (!experienceYears || !skills) {
         return res.status(400).json({
           message: "Experience years and skills are required for servian role"

@@ -8,36 +8,51 @@ import {
   getBookings,
   updateBookingStatus,
   getNotifications,
-  markNotificationRead
+  markNotificationRead,
 } from '../controllers/servianController.js';
+import {
+  getAvailableRequests,
+  getNearbyRequests,
+  getRequestDetails,
+  placeBid,
+  updateBid,
+  withdrawBid,
+  getBidHistory,
+  getAwardedJobs,
+  getServianStats,
+} from '../controllers/servianRequestController.js';
 import { protect, authorizeRoles } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
 // Protect and restrict to servian users only
 router.use(protect, authorizeRoles("servian"));
-
-// Dashboard
 router.get('/dashboard', getDashboardData);
-
-// Profile
 router.put('/profile', updateProfile);
-
-// Availability
 router.put('/availability', updateAvailability);
-
-// Earnings
 router.get('/earnings', getEarnings);
-
-// Reviews
 router.get('/reviews', getReviews);
-
-// Bookings
 router.get('/bookings', getBookings);
 router.put('/bookings/:id/status', updateBookingStatus);
 
 // Notifications
 router.get('/notifications', getNotifications);
 router.put('/notifications/:id/read', markNotificationRead);
+
+
+// Service request routes
+router.get('/service-requests', getAvailableRequests);
+router.get('/service-requests/nearby', getNearbyRequests);
+router.get('/service-requests/:id', getRequestDetails);
+
+// Bidding routes
+router.post('/service-requests/:id/bid', placeBid);
+router.put('/service-requests/:id/bid', updateBid);
+router.delete('/service-requests/:id/bid', withdrawBid);
+
+// History and job management routes
+router.get('/bids', getBidHistory);
+router.get('/jobs', getAwardedJobs);
+router.get('/stats', getServianStats);
 
 export default router;

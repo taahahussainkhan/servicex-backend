@@ -21,7 +21,7 @@ const otpVerificationSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now,
-    expires: 3600 // 1 hour expiry for the entire document
+    expires: 3600 
   }
 });
 

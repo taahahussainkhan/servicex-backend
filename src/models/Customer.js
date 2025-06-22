@@ -10,33 +10,33 @@ const customerSchema = new mongoose.Schema({
   },
   
   // Address Information
-  addresses: [{
-    label: {
-      type: String,
-      required: true,
-      enum: ['Home', 'Office', 'Other']
-    },
-    street: { type: String, required: true },
-    area: { type: String, required: true },
-    city: { type: String, required: true },
-    postalCode: String,
-    coordinates: {
-      type: {
-        type: String,
-        enum: ['Point'],
-        default: 'Point'
-      },
-      coordinates: {
-        type: [Number], // [longitude, latitude]
-        default: [0, 0]
-      }
-    },
-    isDefault: { type: Boolean, default: false },
-    instructions: String 
-  }],
+  // addresses: [{
+  //   label: {
+  //     type: String,
+  //     required: true,
+  //     enum: ['Home', 'Office', 'Other']
+  //   },
+  //   street: { type: String, required: true },
+  //   area: { type: String, required: true },
+  //   city: { type: String, required: true },
+  //   postalCode: String,
+  //   coordinates: {
+  //     type: {
+  //       type: String,
+  //       enum: ['Point'],
+  //       default: 'Point'
+  //     },
+  //     coordinates: {
+  //       type: [Number], 
+  //       default: [0, 0]
+  //     }
+  //   },
+  //   isDefault: { type: Boolean, default: false },
+  //   instructions: String 
+  // }],
   
 
-  address: String,
+  // address: String,
   
 
   serviceRequests: [{
@@ -168,9 +168,9 @@ customerSchema.virtual('completionRate').get(function() {
 });
 
 
-customerSchema.virtual('defaultAddress').get(function() {
-  return this.addresses.find(addr => addr.isDefault) || this.addresses[0];
-});
+// customerSchema.virtual('defaultAddress').get(function() {
+//   return this.addresses.find(addr => addr.isDefault) || this.addresses[0];
+// });
 
 
 customerSchema.pre('save', function(next) {
@@ -267,44 +267,44 @@ customerSchema.methods.canBookServian = function(servianId) {
   );
 };
 
-customerSchema.methods.addAddress = function(addressData) {
-  // If this is the first address or marked as default, make it default
-  if (this.addresses.length === 0 || addressData.isDefault) {
-    this.addresses.forEach(addr => addr.isDefault = false);
-    addressData.isDefault = true;
-  }
+// customerSchema.methods.addAddress = function(addressData) {
+//   // If this is the first address or marked as default, make it default
+//   if (this.addresses.length === 0 || addressData.isDefault) {
+//     this.addresses.forEach(addr => addr.isDefault = false);
+//     addressData.isDefault = true;
+//   }
   
-  this.addresses.push(addressData);
-  return this.save();
-};
+//   this.addresses.push(addressData);
+//   return this.save();
+// };
 
-customerSchema.methods.updateAddress = function(addressId, updateData) {
-  const address = this.addresses.id(addressId);
-  if (!address) throw new Error('Address not found');
+// customerSchema.methods.updateAddress = function(addressId, updateData) {
+//   const address = this.addresses.id(addressId);
+//   if (!address) throw new Error('Address not found');
   
-  // If setting as default, remove default from others
-  if (updateData.isDefault) {
-    this.addresses.forEach(addr => addr.isDefault = false);
-  }
+//   // If setting as default, remove default from others
+//   if (updateData.isDefault) {
+//     this.addresses.forEach(addr => addr.isDefault = false);
+//   }
   
-  Object.assign(address, updateData);
-  return this.save();
-};
+//   Object.assign(address, updateData);
+//   return this.save();
+// };
 
-customerSchema.methods.deleteAddress = function(addressId) {
-  const address = this.addresses.id(addressId);
-  if (!address) throw new Error('Address not found');
+// customerSchema.methods.deleteAddress = function(addressId) {
+//   const address = this.addresses.id(addressId);
+//   if (!address) throw new Error('Address not found');
   
-  const wasDefault = address.isDefault;
-  this.addresses.pull(addressId);
+//   const wasDefault = address.isDefault;
+//   this.addresses.pull(addressId);
   
-  // If deleted address was default, make first address default
-  if (wasDefault && this.addresses.length > 0) {
-    this.addresses[0].isDefault = true;
-  }
+//   // If deleted address was default, make first address default
+//   if (wasDefault && this.addresses.length > 0) {
+//     this.addresses[0].isDefault = true;
+//   }
   
-  return this.save();
-};
+//   return this.save();
+// };
 
 // Static methods
 customerSchema.statics.getTopCustomers = function(limit = 10) {
@@ -320,17 +320,17 @@ customerSchema.statics.getCustomersByTier = function(tier) {
     .sort({ totalSpent: -1 });
 };
 
-customerSchema.statics.findNearbyCustomers = function(longitude, latitude, radius = 10) {
-  return this.find({
-    isVerified: true,
-    'addresses.coordinates': {
-      $near: {
-        $geometry: { type: 'Point', coordinates: [longitude, latitude] },
-        $maxDistance: radius * 1000 // Convert km to meters
-      }
-    }
-  }).select('-password -otp -otpExpires');
-};
+// customerSchema.statics.findNearbyCustomers = function(longitude, latitude, radius = 10) {
+//   return this.find({
+//     isVerified: true,
+//     'addresses.coordinates': {
+//       $near: {
+//         $geometry: { type: 'Point', coordinates: [longitude, latitude] },
+//         $maxDistance: radius * 1000 // Convert km to meters
+//       }
+//     }
+//   }).select('-password -otp -otpExpires');
+// };
 
 const Customer = User.discriminator("customer", customerSchema);
 export default Customer;

@@ -41,7 +41,8 @@ export const getDashboardData = asyncHandler(async (req, res) => {
             customerTier: customer.customerTier,
             loyaltyPoints: customer.loyaltyPoints,
             experienceLevel: customer.experienceLevel,
-            joinDate: customer.customerStats.joinDate
+            joinDate: customer.customerStats.joinDate,
+            location: customer.location
         },
         stats: {
             totalBookings: customer.customerStats.totalBookings,
@@ -392,17 +393,38 @@ export const getServianDetails = asyncHandler(async (req, res) => {
         throw new Error('Servian not found');
     }
 
-    // Get recent reviews
+    
     const reviews = await Review.find({
         target: id,
         role: 'customer_to_servian'
     })
         .populate('author', 'name profileImage')
+        .populate('booking', 'service scheduledDate')
         .sort({ createdAt: -1 })
         .limit(10);
 
+        
+
     const servianData = {
-        ...servian.toObject(),
+        _id: servian._id,
+        name: servian.name,
+        email: servian.email,
+        phone: servian.phone,
+        profileImage: servian.profileImage,
+        serviceCategory: servian.serviceCategory,
+        location: servian.location,
+        bio: servian.bio,
+        experienceYears: servian.experienceYears,
+        skills: servian.skills,
+        averageRating: servian.averageRating,
+        totalReviews: servian.totalReviews,
+        isVerified: servian.isVerified,
+        availability: servian.availability,
+        pricing: servian.pricing,
+        portfolio: servian.portfolio,
+        equipment: servian.equipment,
+        certifications: servian.certifications,
+        emergencyService: servian.emergencyService,
         recentReviews: reviews,
         isAvailable: servian.isAvailable(),
         canTakeEmergencyJobs: servian.canTakeEmergencyJobs()

@@ -9,6 +9,11 @@ import {
   updateBookingStatus,
   getNotifications,
   markNotificationRead,
+  uploadProfileImage,
+  addPortfolioItem,
+  updatePortfolioItem,
+  deletePortfolioItem,
+  
 } from '../controllers/servianController.js';
 import {
   getAvailableRequests,
@@ -22,6 +27,7 @@ import {
   getServianStats,
 } from '../controllers/servianRequestController.js';
 import { protect, authorizeRoles } from '../middlewares/authMiddleware.js';
+import upload from '../middlewares/uploadMiddleware.js';
 
 const router = express.Router();
 
@@ -49,6 +55,13 @@ router.get('/service-requests/:id', getRequestDetails);
 router.post('/service-requests/:id/bid', placeBid);
 router.put('/service-requests/:id/bid', updateBid);
 router.delete('/service-requests/:id/bid', withdrawBid);
+
+
+// Profile and portfolio management routes
+router.post('/profile/image', upload.single('profileImage'), uploadProfileImage);
+router.post('/portfolio', upload.array('images', 5), addPortfolioItem); // Max 5 images
+router.put('/portfolio/:itemId', updatePortfolioItem);
+router.delete('/portfolio/:itemId', deletePortfolioItem);
 
 // History and job management routes
 router.get('/bids', getBidHistory);

@@ -62,6 +62,31 @@ const servianSchema = new mongoose.Schema({
     min: [1, 'Service radius must be at least 1km'],
     max: [100, 'Service radius cannot exceed 100km']
   },
+  subscription: {
+    tier: {
+      type: String,
+      enum: ['FREE', 'BASIC', 'PREMIUM'],
+      default: 'FREE'
+    },
+    status: {
+      type: String,
+      enum: ['ACTIVE', 'INACTIVE', 'CANCELLED', 'EXPIRED'],
+      default: 'ACTIVE'
+    },
+    startDate: {
+      type: Date,
+      default: Date.now
+    },
+    endDate: Date,
+    renewsAt: Date,
+    lastPaymentDate: Date,
+    nextBillingDate: Date,
+    paymentMethod: String,
+    isAutoRenewal: {
+      type: Boolean,
+      default: false
+    }
+  },
 
   // Availability
   availability: {

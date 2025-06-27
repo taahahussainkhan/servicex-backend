@@ -1,3 +1,4 @@
+// Updated notificationModel.js
 import mongoose from 'mongoose';
 
 const notificationSchema = new mongoose.Schema({
@@ -8,7 +9,19 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['booking', 'payment', 'review', 'system'],
+    enum: [
+      'booking', 
+      'payment', 
+      'review', 
+      'system',
+      'new_bid',
+      'bid_updated',
+      'bid_withdrawn',
+      'bid_accepted',
+      'bid_rejected',
+      'request_cancelled',
+      'service_completed'
+    ],
     required: true
   },
   title: String,

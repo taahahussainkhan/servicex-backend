@@ -26,6 +26,12 @@ export const createServiceRequest = asyncHandler(async (req, res) => {
         throw new Error('Customer not found');
     }
 
+    const requestLimits = customer.canCreateServiceRequest();
+    if (!requestLimits.allowed) {
+        res.status(403);
+        throw new Error(`Service request limit reached. Your ${requestLimits.tier} plan allows ${requestLimits.limit} requests per week. Please upgrade your subscription or wait for next week.`);
+    }
+
     // Validate budget
     if (budget.min >= budget.max) {
         res.status(400);
@@ -45,6 +51,8 @@ export const createServiceRequest = asyncHandler(async (req, res) => {
         images: images || []
     });
 
+
+    await customer.incrementWeeklyRequests();
     // Add to customer's service requests
     customer.serviceRequests.push(serviceRequest._id);
     await customer.save();
@@ -56,6 +64,24 @@ export const createServiceRequest = asyncHandler(async (req, res) => {
         success: true,
         message: 'Service request created successfully',
         data: populatedRequest
+    });
+});
+
+// @desc    Get customer's service request limits
+// @route   GET /api/customer/service-requests/limits
+// @access  Private (Customer only)
+export const getRequestLimits = asyncHandler(async (req, res) => {
+    const customer = await Customer.findById(req.user.id);
+    if (!customer) {
+        res.status(404);
+        throw new Error('Customer not found');
+    }
+
+    const limits = customer.canCreateServiceRequest();
+
+    res.json({
+        success: true,
+        data: limits
     });
 });
 
@@ -84,12 +110,12 @@ export const getServiceRequests = asyncHandler(async (req, res) => {
         hasPrev: page > 1
     };
 
-    res.json({ 
-        success: true, 
-        data: { 
-            requests, 
-            pagination 
-        } 
+    res.json({
+        success: true,
+        data: {
+            requests,
+            pagination
+        }
     });
 });
 
@@ -254,7 +280,7 @@ export const acceptBid = asyncHandler(async (req, res) => {
     const rejectedBids = request.bids.filter(
         b => b._id.toString() !== bidId.toString()
     );
-    
+
     for (const rejectedBid of rejectedBids) {
         await Notification.create({
             user: rejectedBid.servian,

@@ -24,7 +24,18 @@ const serviceRequestSchema = new mongoose.Schema({
   serviceCategory: {
     type: String,
     required: true,
-    enum: ['HOME_MAINTENANCE', 'ELECTRICAL', 'PLUMBING', 'CARPENTRY', 'CLEANING', 'PAINTING', 'AC_REPAIR', 'APPLIANCE_REPAIR', 'GARDENING', 'OTHER']
+    enum: ['HOME_MAINTENANCE', 'ELECTRICAL', 'PLUMBING', 'CARPENTRY', 'CLEANING', 'PAINTING', 'AC_REPAIR', 'APPLIANCE_REPAIR', 'GARDENING','MASONORY','HOUSE_BUILDING','INTERIOR_DESIGN',
+      'EVENT_MANAGEMENT','HOME_TUTING','COOKING','DRIVING','HOME_MAID', 'OTHER']
+  },
+
+  reviewed: {
+    type: Boolean,
+    default: false
+  },
+  review: {
+    rating: Number,
+    comment: String,
+    createdAt: Date
   },
   
   location: {
@@ -87,9 +98,15 @@ const serviceRequestSchema = new mongoose.Schema({
       ref: 'User',
       required: true
     },
-    amount: {
+    // Fixed: Changed from 'amount' to 'bidAmount' to match controller usage
+    bidAmount: {
       type: Number,
       required: true,
+      min: 0
+    },
+    // Keep both for backward compatibility
+    amount: {
+      type: Number,
       min: 0
     },
     message: {
@@ -115,9 +132,17 @@ const serviceRequestSchema = new mongoose.Schema({
     }
   }],
   
+  // Fixed: Changed structure to match controller usage
   awardedBid: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User' 
+    servian: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    bidAmount: Number,
+    acceptedAt: {
+      type: Date,
+      default: Date.now
+    }
   },
   
   completedAt: Date,
@@ -143,6 +168,8 @@ serviceRequestSchema.index({ serviceCategory: 1, status: 1 });
 serviceRequestSchema.index({ 'location.coordinates': '2dsphere' });
 serviceRequestSchema.index({ urgency: 1, createdAt: -1 });
 serviceRequestSchema.index({ status: 1, createdAt: -1 });
+// Added index for awardedBid queries used in controller
+serviceRequestSchema.index({ 'awardedBid.servian': 1, status: 1 });
 
 // Virtuals
 serviceRequestSchema.virtual('isActive').get(function() {
@@ -167,6 +194,15 @@ serviceRequestSchema.pre('save', function(next) {
   // Update totalBids count
   this.totalBids = this.bids.length;
   
+  // Sync bidAmount and amount fields for backward compatibility
+  this.bids.forEach(bid => {
+    if (bid.bidAmount && !bid.amount) {
+      bid.amount = bid.bidAmount;
+    } else if (bid.amount && !bid.bidAmount) {
+      bid.bidAmount = bid.amount;
+    }
+  });
+  
   // Auto-close requests after 7 days if no bids accepted
   if (this.isActive && this.timeLeft === 0 && this.totalBids === 0) {
     this.status = 'CLOSED';
@@ -190,6 +226,13 @@ serviceRequestSchema.methods.addBid = function(bidData) {
     throw new Error('This request is no longer accepting bids');
   }
   
+  // Ensure both bidAmount and amount are set for compatibility
+  if (bidData.bidAmount && !bidData.amount) {
+    bidData.amount = bidData.bidAmount;
+  } else if (bidData.amount && !bidData.bidAmount) {
+    bidData.bidAmount = bidData.amount;
+  }
+  
   this.bids.push(bidData);
   this.totalBids = this.bids.length;
   
@@ -207,6 +250,13 @@ serviceRequestSchema.methods.updateBid = function(servianId, updateData) {
   
   if (bid.status !== 'PENDING') {
     throw new Error('Cannot update bid with current status');
+  }
+  
+  // Sync bidAmount and amount fields
+  if (updateData.bidAmount && !updateData.amount) {
+    updateData.amount = updateData.bidAmount;
+  } else if (updateData.amount && !updateData.bidAmount) {
+    updateData.bidAmount = updateData.amount;
   }
   
   Object.assign(bid, updateData);
@@ -228,7 +278,13 @@ serviceRequestSchema.methods.acceptBid = function(bidId) {
   
   bid.status = 'ACCEPTED';
   this.status = 'AWARDED';
-  this.awardedBid = bid.servian;
+  
+  // Fixed: Set awardedBid structure to match controller expectations
+  this.awardedBid = {
+    servian: bid.servian,
+    bidAmount: bid.bidAmount || bid.amount,
+    acceptedAt: new Date()
+  };
   
   return this.save();
 };

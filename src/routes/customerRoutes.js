@@ -26,8 +26,11 @@ import {
   cancelServiceRequest,
   acceptBid,
   markCompleted,
-  getRequestStats
+  getRequestStats,
+  getRequestLimits
 } from '../controllers/serviceRequestController.js';
+
+import { addServiceRequestReview } from '../controllers/reviewController.js';
 import { protect, authorizeRoles } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
@@ -38,7 +41,10 @@ router.use(protect, authorizeRoles("customer"));
 // Dashboard & Profile
 router.get('/dashboard', getDashboardData);
 router.put('/profile', updateProfile);
-
+router.get('/service-requests/limits', getRequestLimits);
+router.post(
+  '/service-requests/:id/review', addServiceRequestReview
+);
 // Bookings
 router.get('/bookings', getBookings);
 router.post('/bookings', createBooking);
@@ -56,6 +62,7 @@ router.get('/servians/:id', getServianDetails);
 router.post('/favorites/:servianId', addToFavorites);
 router.delete('/favorites/:servianId', removeFromFavorites);
 router.get('/favorites', getFavorites);
+
 
 // Blocking
 router.post('/block/:servianId', blockServian);

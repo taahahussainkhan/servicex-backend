@@ -57,95 +57,157 @@ export const getDashboardData = asyncHandler(async (req, res) => {
 // @route   PUT /api/servian/profile
 // @access  Private (Servian only)
 export const updateProfile = asyncHandler(async (req, res) => {
-  const servian = await Servian.findById(req.user.id);
+  try {
+    const servian = await Servian.findById(req.user.id);
 
-  if (!servian) {
-    res.status(404);
-    throw new Error('Servian not found');
-  }
-
-  const {
-    name,
-    phone,
-    location,
-    experienceYears,
-    skills,
-    serviceCategory,
-    availableForHomeVisit,
-    serviceRadius,
-    pricing,
-    availability,
-    certifications,
-    equipment,
-    emergencyService,
-    bio,
-    specializations,
-    languages
-  } = req.body;
-
-  // Update all allowed fields
-  if (name) servian.name = name;
-  if (phone) servian.phone = phone;
-
-  // Handle location properly
-  if (location) {
-    if (typeof location === "string") {
-      // If location is a string, parse it or store as is
-      servian.location = location;
-    } else if (typeof location === "object") {
-      servian.location = {
-        area: location.area || "",
-        street: location.street || "",
-        city: location.city || ""
-      };
+    if (!servian) {
+      res.status(404);
+      throw new Error('Servian not found');
     }
-  }
 
-  if (experienceYears !== undefined) servian.experienceYears = experienceYears;
-  if (skills) servian.skills = skills;
-  if (serviceCategory) servian.serviceCategory = serviceCategory;
-  if (availableForHomeVisit !== undefined) servian.availableForHomeVisit = availableForHomeVisit;
-  if (serviceRadius) servian.serviceRadius = serviceRadius;
-  if (pricing) servian.pricing = { ...servian.pricing, ...pricing };
+    const {
+      name,
+      phone,
+      location,
+      experienceYears,
+      skills,
+      serviceCategory,
+      availableForHomeVisit,
+      serviceRadius,
+      pricing,
+      availability,
+      certifications,
+      equipment,
+      emergencyService,
+      bio,
+      specializations,
+      languages
+    } = req.body;
 
-  // Handle availability update
-  if (availability) {
-    servian.availability = { ...servian.availability, ...availability };
-  }
+    // Update all allowed fields with proper validation
+    if (name !== undefined) servian.name = name;
+    if (phone !== undefined) servian.phone = phone;
 
-  if (certifications) servian.certifications = certifications;
-  if (equipment) servian.equipment = equipment;
-  if (emergencyService) servian.emergencyService = { ...servian.emergencyService, ...emergencyService };
-  if (bio) servian.bio = bio;
-  if (specializations) servian.specializations = specializations;
-  if (languages) servian.languages = languages;
-
-  // Calculate and update profile completeness
-  servian.profileCompleteness = calculateProfileCompleteness(servian);
-
-  const updatedServian = await servian.save();
-
-  res.json({
-    success: true,
-    message: 'Profile updated successfully',
-    data: {
-      name: updatedServian.name,
-      phone: updatedServian.phone,
-      location: updatedServian.location,
-      experienceYears: updatedServian.experienceYears,
-      skills: updatedServian.skills,
-      serviceCategory: updatedServian.serviceCategory,
-      availableForHomeVisit: updatedServian.availableForHomeVisit,
-      serviceRadius: updatedServian.serviceRadius,
-      pricing: updatedServian.pricing,
-      availability: updatedServian.availability,
-      bio: updatedServian.bio,
-      specializations: updatedServian.specializations,
-      languages: updatedServian.languages,
-      certifications: updatedServian.certifications,
-      profileCompleteness: updatedServian.profileCompleteness
+    // Handle location properly - convert string to object format
+    if (location !== undefined) {
+      if (typeof location === "string" && location.trim() !== "") {
+        // Parse string location into object format
+        // For now, put the entire string in the 'area' field
+        // You can implement more sophisticated parsing if needed
+        servian.location = {
+          area: location.trim(),
+          street: "",
+          city: ""
+        };
+      } else if (typeof location === "object" && location !== null) {
+        // Handle object location
+        servian.location = {
+          area: location.area || "",
+          street: location.street || "",
+          city: location.city || ""
+        };
+      } else {
+        // Handle empty string, null, or undefined
+        servian.location = {
+          area: "",
+          street: "",
+          city: ""
+        };
+      }
     }
-  });
+
+    if (experienceYears !== undefined) {
+      servian.experienceYears = parseInt(experienceYears) || 0;
+    }
+    
+    if (skills !== undefined) {
+      // Ensure skills is always an array
+      if (Array.isArray(skills)) {
+        servian.skills = skills;
+      } else {
+        servian.skills = [];
+      }
+    }
+    
+    if (serviceCategory !== undefined) servian.serviceCategory = serviceCategory;
+    if (availableForHomeVisit !== undefined) servian.availableForHomeVisit = availableForHomeVisit;
+    if (serviceRadius !== undefined) servian.serviceRadius = serviceRadius;
+    
+    if (pricing !== undefined) {
+      servian.pricing = { ...servian.pricing, ...pricing };
+    }
+
+    // Handle availability update with proper validation
+    if (availability !== undefined) {
+      if (typeof availability === 'object' && availability !== null) {
+        servian.availability = {
+          ...servian.availability,
+          ...availability
+        };
+      }
+    }
+
+    if (certifications !== undefined) {
+      // Ensure certifications is always an array
+      if (Array.isArray(certifications)) {
+        servian.certifications = certifications;
+      } else {
+        servian.certifications = [];
+      }
+    }
+    
+    if (equipment !== undefined) servian.equipment = equipment;
+    
+    if (emergencyService !== undefined) {
+      servian.emergencyService = { ...servian.emergencyService, ...emergencyService };
+    }
+    
+    if (bio !== undefined) servian.bio = bio;
+    if (specializations !== undefined) servian.specializations = specializations;
+    
+    if (languages !== undefined) {
+      // Ensure languages is always an array
+      if (Array.isArray(languages)) {
+        servian.languages = languages;
+      } else {
+        servian.languages = [];
+      }
+    }
+
+    // Calculate and update profile completeness
+    servian.profileCompleteness = calculateProfileCompleteness(servian);
+
+    const updatedServian = await servian.save();
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: {
+        name: updatedServian.name,
+        phone: updatedServian.phone,
+        location: updatedServian.location,
+        experienceYears: updatedServian.experienceYears,
+        skills: updatedServian.skills,
+        serviceCategory: updatedServian.serviceCategory,
+        availableForHomeVisit: updatedServian.availableForHomeVisit,
+        serviceRadius: updatedServian.serviceRadius,
+        pricing: updatedServian.pricing,
+        availability: updatedServian.availability,
+        bio: updatedServian.bio,
+        specializations: updatedServian.specializations,
+        languages: updatedServian.languages,
+        certifications: updatedServian.certifications,
+        profileCompleteness: updatedServian.profileCompleteness
+      }
+    });
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update profile',
+      error: error.message
+    });
+  }
 });
 
 

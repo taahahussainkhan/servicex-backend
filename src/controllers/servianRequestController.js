@@ -9,14 +9,15 @@ import asyncHandler from 'express-async-handler';
 // @route   GET /api/servian/service-requests
 // @access  Private (Servian only)
 export const getAvailableRequests = asyncHandler(async (req, res) => {
-    const { 
-        category, 
-        urgency, 
-        budgetMin, 
+    const {
+        category,
+        urgency,
+        budgetMin,
         budgetMax,
         city,
         area,
-        page = 1, 
+        status, // Added status filter
+        page = 1,
         limit = 10,
         sortBy = 'createdAt',
         sortOrder = 'desc'
@@ -28,15 +29,39 @@ export const getAvailableRequests = asyncHandler(async (req, res) => {
         throw new Error('Servian not found');
     }
 
-    // Build query
-    const query = { status: 'ACTIVE' };
+    // Build query - Modified to handle different statuses based on servian involvement
+    const query = {};
 
-    // Filter by service category - match with servian's service categories
+    // Handle status filter with servian involvement logic
+    if (status) {
+        if (status === 'ACTIVE') {
+            // Show all ACTIVE requests regardless of servian involvement
+            query.status = 'ACTIVE';
+        } else {
+            // For other statuses, only show if servian has bid or was awarded
+            query.status = status;
+            query.$or = [
+                { 'bids.servian': req.user.id },
+                { 'awardedBid.servian': req.user.id }
+            ];
+        }
+    } else {
+        // Default: show ACTIVE requests OR requests where servian has involvement
+        query.$or = [
+            { status: 'ACTIVE' },
+            {
+                status: { $in: ['AWARDED', 'COMPLETED', 'CANCELLED'] },
+                $or: [
+                    { 'bids.servian': req.user.id },
+                    { 'awardedBid.servian': req.user.id }
+                ]
+            }
+        ];
+    }
+
+    // Filter by service category
     if (category) {
         query.serviceCategory = category;
-    } else if (servian.serviceCategory && servian.serviceCategory.length > 0) {
-        // Show requests that match servian's service categories
-        query.serviceCategory = { $in: servian.serviceCategory };
     }
 
     // Filter by urgency
@@ -59,19 +84,53 @@ export const getAvailableRequests = asyncHandler(async (req, res) => {
         query['location.area'] = new RegExp(area, 'i');
     }
 
-    // Exclude requests where this servian has already bid
-    query['bids.servian'] = { $ne: req.user.id };
-
     // Sort options
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
     const totalRequests = await ServiceRequest.countDocuments(query);
+
+    // Modified populate to include more fields for awarded requests
     const requests = await ServiceRequest.find(query)
-        .populate('customer', 'name profileImage customerTier averageRating totalReviews')
+        .populate('customer', 'name profileImage customerTier averageRating totalReviews phone')
+        .populate({
+            path: 'bids.servian',
+            select: 'name profileImage averageRating phone'
+        })
+        .populate({
+            path: 'awardedBid.servian',
+            select: 'name profileImage averageRating phone'
+        })
         .sort(sortOptions)
         .skip((page - 1) * limit)
         .limit(Number(limit));
+
+    // Add additional fields for each request
+    const enrichedRequests = requests.map(request => {
+        const requestObj = request.toObject();
+
+        // Check if current servian has bidded on this request
+        const currentServianId = req.user.id.toString();
+        const userBid = requestObj.bids?.find(bid => {
+            const bidServianId = bid.servian?._id?.toString() || bid.servian?.toString();
+            return bidServianId === currentServianId;
+        });
+
+        // Only include bids from current servian for non-ACTIVE requests
+        if (requestObj.status !== 'ACTIVE') {
+            requestObj.bids = requestObj.bids?.filter(bid => {
+                const bidServianId = bid.servian?._id?.toString() || bid.servian?.toString();
+                return bidServianId === currentServianId;
+            }) || [];
+            requestObj.totalBids = requestObj.bids.length;
+        }
+
+        return {
+            ...requestObj,
+            hasUserBid: !!userBid,
+            userBid: userBid || null
+        };
+    });
 
     const pagination = {
         currentPage: Number(page),
@@ -81,12 +140,12 @@ export const getAvailableRequests = asyncHandler(async (req, res) => {
         hasPrev: page > 1
     };
 
-    res.json({ 
-        success: true, 
-        data: { 
-            requests, 
-            pagination 
-        } 
+    res.json({
+        success: true,
+        data: {
+            requests: enrichedRequests,
+            pagination
+        }
     });
 });
 
@@ -94,7 +153,7 @@ export const getAvailableRequests = asyncHandler(async (req, res) => {
 // @route   GET /api/servian/service-requests/nearby
 // @access  Private (Servian only)
 export const getNearbyRequests = asyncHandler(async (req, res) => {
-    const { longitude, latitude, radius = 10, category, urgency } = req.query;
+    const { longitude, latitude, radius = 10, category, urgency, status } = req.query;
 
     if (!longitude || !latitude) {
         res.status(400);
@@ -108,20 +167,34 @@ export const getNearbyRequests = asyncHandler(async (req, res) => {
     }
 
     const filters = {};
-    if (category) filters.category = category;
+    if (category) filters.serviceCategory = category;
     if (urgency) filters.urgency = urgency;
+    if (status) {
+        filters.status = status;
+    } else {
+        filters.status = { $ne: 'CANCELLED' };
+    }
 
-    const requests = await ServiceRequest.findNearbyRequests(
-        Number(longitude), 
-        Number(latitude), 
-        Number(radius),
-        filters
-    );
+    const requests = await ServiceRequest.find({
+        ...filters,
+        'location.coordinates': {
+            $near: {
+                $geometry: { type: 'Point', coordinates: [Number(longitude), Number(latitude)] },
+                $maxDistance: Number(radius) * 1000
+            }
+        }
+    })
+        .populate('customer', 'name profileImage customerTier averageRating')
+        .populate('bids.servian', 'name profileImage averageRating')
+        .populate('awardedBid', 'name profileImage averageRating');
 
-    // Filter out requests where this servian has already bid
-    const availableRequests = requests.filter(request => 
-        !request.bids.some(bid => bid.servian.toString() === req.user.id.toString())
-    );
+    // For ACTIVE requests, filter out requests where this servian has already bid
+    let availableRequests = requests;
+    if (!status || status === 'ACTIVE') {
+        availableRequests = requests.filter(request =>
+            !request.bids.some(bid => bid.servian?._id?.toString() === req.user.id.toString())
+        );
+    }
 
     res.json({
         success: true,
@@ -133,34 +206,57 @@ export const getNearbyRequests = asyncHandler(async (req, res) => {
     });
 });
 
+
+
 // @desc    Get single service request details for servians
 // @route   GET /api/servian/service-requests/:id
 // @access  Private (Servian only)
 export const getRequestDetails = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
-    const request = await ServiceRequest.findOne({
-        _id: id,
-        status: 'ACTIVE'
-    })
-        .populate('customer', 'name profileImage customerTier averageRating totalReviews memberSince')
-        .populate('bids.servian', 'name profileImage averageRating');
+    // Modified to not restrict to only ACTIVE status
+    const request = await ServiceRequest.findById(id)
+        .populate('customer', 'name profileImage customerTier averageRating totalReviews memberSince phone')
+        .populate({
+            path: 'bids.servian',
+            select: 'name profileImage averageRating phone'
+        })
+        .populate({
+            path: 'awardedBid',
+            select: 'name profileImage averageRating phone'
+        });
 
+        
     if (!request) {
         res.status(404);
-        throw new Error('Service request not found or no longer available');
+        throw new Error('Service request not found');
     }
 
     // Check if servian has already bid
     const existingBid = request.bids.find(
-        bid => bid.servian._id.toString() === req.user.id.toString()
+        bid => bid.servian?._id?.toString() === req.user.id.toString()
     );
 
-    // Increment views
-    await request.incrementViews();
-
-    res.json({ 
-        success: true, 
+    // Increment views only for active requests
+    if (request.status !== 'ACTIVE') {
+        const hasInvolvement = existingBid || 
+            request.awardedBid?.servian?._id?.toString() === req.user.id.toString();
+        
+        if (!hasInvolvement) {
+            res.status(403);
+            throw new Error('You do not have access to view this request');
+        }
+        
+        // Filter bids to only show current servian's bid for non-ACTIVE requests
+        request.bids = request.bids.filter(
+            bid => bid.servian?._id?.toString() === req.user.id.toString()
+        );
+    }
+    if (request.status === 'ACTIVE' && !existingBid) {
+        await request.incrementViews();
+    }
+    res.json({
+        success: true,
         data: {
             ...request.toObject(),
             hasUserBid: !!existingBid,
@@ -204,6 +300,15 @@ export const placeBid = asyncHandler(async (req, res) => {
         throw new Error('Service request not found or no longer accepting bids');
     }
 
+    const existingBid = request.bids.find(
+        bid => bid.servian?.toString() === req.user.id.toString()
+    );
+
+    if (existingBid) {
+        res.status(400);
+        throw new Error('You have already placed a bid on this request');
+    }
+
     // Check if servian has required service category
     if (servian.serviceCategory && servian.serviceCategory.length > 0) {
         if (!servian.serviceCategory.includes(request.serviceCategory)) {
@@ -223,7 +328,7 @@ export const placeBid = asyncHandler(async (req, res) => {
         const proposed = new Date(proposedDate);
         const preferred = new Date(request.preferredDate);
         const today = new Date();
-        
+
         if (proposed < today) {
             res.status(400);
             throw new Error('Proposed date cannot be in the past');
@@ -232,7 +337,7 @@ export const placeBid = asyncHandler(async (req, res) => {
 
     const bidData = {
         servian: req.user.id,
-        amount: Number(amount),
+        bidAmount: Number(amount), // Changed from 'amount' to 'bidAmount' to match frontend
         message: message || '',
         estimatedDuration: estimatedDuration || '',
         materials: materials || [],
@@ -248,15 +353,15 @@ export const placeBid = asyncHandler(async (req, res) => {
             type: 'new_bid',
             title: 'New Bid Received',
             message: `${servian.name} placed a bid of PKR ${amount.toLocaleString()} on your request "${request.title}"`,
-            data: { 
-                requestId: request._id, 
+            data: {
+                requestId: request._id,
                 servianId: req.user.id,
-                bidAmount: amount 
+                bidAmount: amount
             }
         });
 
         const updatedRequest = await ServiceRequest.findById(request._id)
-            .populate('customer', 'name profileImage customerTier')
+            .populate('customer', 'name profileImage customerTier phone')
             .populate('bids.servian', 'name profileImage averageRating phone');
 
         res.status(201).json({
@@ -289,15 +394,22 @@ export const updateBid = asyncHandler(async (req, res) => {
     }
 
     // Validate bid amount if being updated
-    if (updateData.amount) {
-        if (updateData.amount <= 0) {
+    if (updateData.amount || updateData.bidAmount) {
+        const amount = updateData.amount || updateData.bidAmount;
+        if (amount <= 0) {
             res.status(400);
             throw new Error('Valid bid amount is required');
         }
-        
-        if (updateData.amount < request.budget.min || updateData.amount > request.budget.max) {
+
+        if (amount < request.budget.min || amount > request.budget.max) {
             res.status(400);
             throw new Error(`Bid amount must be between PKR ${request.budget.min} and PKR ${request.budget.max}`);
+        }
+
+        // Ensure we use the correct field name
+        if (updateData.amount) {
+            updateData.bidAmount = updateData.amount;
+            delete updateData.amount;
         }
     }
 
@@ -305,7 +417,7 @@ export const updateBid = asyncHandler(async (req, res) => {
     if (updateData.proposedDate) {
         const proposed = new Date(updateData.proposedDate);
         const today = new Date();
-        
+
         if (proposed < today) {
             res.status(400);
             throw new Error('Proposed date cannot be in the past');
@@ -316,23 +428,23 @@ export const updateBid = asyncHandler(async (req, res) => {
         await request.updateBid(req.user.id, updateData);
 
         // Create notification for customer about bid update
-        if (updateData.amount) {
+        if (updateData.bidAmount) {
             const servian = await Servian.findById(req.user.id);
             await Notification.create({
                 user: request.customer,
                 type: 'bid_updated',
                 title: 'Bid Updated',
-                message: `${servian.name} updated their bid to PKR ${updateData.amount.toLocaleString()} on your request "${request.title}"`,
-                data: { 
-                    requestId: request._id, 
+                message: `${servian.name} updated their bid to PKR ${updateData.bidAmount.toLocaleString()} on your request "${request.title}"`,
+                data: {
+                    requestId: request._id,
                     servianId: req.user.id,
-                    newBidAmount: updateData.amount 
+                    newBidAmount: updateData.bidAmount
                 }
             });
         }
 
         const updatedRequest = await ServiceRequest.findById(request._id)
-            .populate('customer', 'name profileImage customerTier')
+            .populate('customer', 'name profileImage customerTier phone')
             .populate('bids.servian', 'name profileImage averageRating phone');
 
         res.json({
@@ -390,8 +502,8 @@ export const withdrawBid = asyncHandler(async (req, res) => {
         type: 'bid_withdrawn',
         title: 'Bid Withdrawn',
         message: `${servian.name} has withdrawn their bid from your request "${request.title}"`,
-        data: { 
-            requestId: request._id, 
+        data: {
+            requestId: request._id,
             servianId: req.user.id
         }
     });
@@ -489,8 +601,8 @@ export const getBidHistory = asyncHandler(async (req, res) => {
 export const getAwardedJobs = asyncHandler(async (req, res) => {
     const { status, page = 1, limit = 10 } = req.query;
 
-    const query = { awardedBid: req.user.id };
-    
+    const query = { 'awardedBid.servian': req.user.id }; // Fixed query
+
     if (status) {
         query.status = status;
     } else {
@@ -500,7 +612,7 @@ export const getAwardedJobs = asyncHandler(async (req, res) => {
     const totalJobs = await ServiceRequest.countDocuments(query);
     const jobs = await ServiceRequest.find(query)
         .populate('customer', 'name profileImage customerTier phone email')
-        .populate('awardedBid', 'name profileImage phone')
+        .populate('awardedBid.servian', 'name profileImage phone')
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(Number(limit));
@@ -542,7 +654,7 @@ export const getServianStats = asyncHandler(async (req, res) => {
 
     // Get job statistics
     const jobStats = await ServiceRequest.aggregate([
-        { $match: { awardedBid: servianId } },
+        { $match: { 'awardedBid.servian': servianId } }, // Fixed query
         {
             $group: {
                 _id: '$status',
@@ -577,8 +689,8 @@ export const getServianStats = asyncHandler(async (req, res) => {
         formattedStats.jobs[stat._id.toLowerCase()] = stat.count;
     });
 
-    res.json({ 
-        success: true, 
-        data: formattedStats 
+    res.json({
+        success: true,
+        data: formattedStats
     });
 });

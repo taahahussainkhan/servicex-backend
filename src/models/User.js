@@ -118,6 +118,22 @@ userSchema.pre("save", function (next) {
   next();
 });
 
+
+userSchema.pre('save', function(next) {
+  // Only run this for new documents
+  if (this.isNew) {
+    // Initialize subscription for customers and servians
+    if (this.role === 'customer' || this.role === 'servian') {
+      this.subscription = {
+        tier: 'FREE',
+        status: 'ACTIVE',
+        startDate: new Date()
+      };
+    }
+  }
+  next();
+});
+
 // Instance method for password matching
 userSchema.methods.matchPassword = async function (enteredPassword) {
   console.log("🔐 matchPassword called with:", {
@@ -165,6 +181,8 @@ userSchema.statics.getPendingUsers = function (filters = {}) {
     .select('-password -otp -otpExpires')
     .sort({ createdAt: -1 });
 };
+
+
 
 
 userSchema.index({ isVerified: 1, isRejected: 1, __t: 1 });

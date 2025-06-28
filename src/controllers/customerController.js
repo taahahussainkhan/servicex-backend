@@ -11,7 +11,7 @@ import asyncHandler from 'express-async-handler';
 export const getDashboardData = asyncHandler(async (req, res) => {
     const customer = await Customer.findById(req.user.id)
         .select('-password -otp -otpExpires')
-        .populate('favoriteServians.servian', 'name averageRating serviceCategory profileImage');
+        .populate('favoriteServians.servian', 'name averageRating serviceCategory profileImage role');
 
     if (!customer) {
         res.status(404);
@@ -20,7 +20,7 @@ export const getDashboardData = asyncHandler(async (req, res) => {
 
     // Get recent bookings
     const recentBookings = await Booking.find({ customer: req.user.id })
-        .populate('servian', 'name profileImage averageRating')
+        .populate('servian', 'name profileImage averageRating role')
         .sort({ createdAt: -1 })
         .limit(5);
 
@@ -29,7 +29,7 @@ export const getDashboardData = asyncHandler(async (req, res) => {
         customer: req.user.id,
         status: { $in: ['pending', 'confirmed', 'in_progress'] }
     })
-        .populate('servian', 'name profileImage phone')
+        .populate('servian', 'name profileImage phone role')
         .sort({ scheduledDate: 1 });
 
     const dashboardData = {
@@ -116,7 +116,7 @@ export const getBookings = asyncHandler(async (req, res) => {
 
     const totalBookings = await Booking.countDocuments(query);
     const bookings = await Booking.find(query)
-        .populate('servian', 'name profileImage averageRating phone serviceCategory')
+        .populate('servian', 'name profileImage averageRating phone serviceCategory role')
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(Number(limit));
@@ -165,10 +165,10 @@ export const createBooking = asyncHandler(async (req, res) => {
         throw new Error('You have blocked this servian');
     }
 
-    if (!servian.isAvailable()) {
-        res.status(400);
-        throw new Error('Servian is not available at the moment');
-    }
+    // if (!servian.isAvailable()) {
+    //     res.status(400);
+    //     throw new Error('Servian is not available at the moment');
+    // }
 
     const booking = await Booking.create({
         customer: req.user.id,
@@ -187,16 +187,17 @@ export const createBooking = asyncHandler(async (req, res) => {
     await customer.save();
 
 
-    await Notification.create({
-        user: servianId,
-        type: 'new_booking',
-        title: 'New Booking Request',
-        message: `You have a new booking request from ${customer.name}`,
-        data: { bookingId: booking._id }
-    });
+    // await Notification.create({
+    //     user: servianId,
+    //     type: 'new_booking',
+    //     title: 'New Booking Request',
+    //     message: `You have a new booking request from ${customer.name}`,
+    //     data: { bookingId: booking._id }
+    // });
 
     const populatedBooking = await Booking.findById(booking._id)
-        .populate('servian', 'name profileImage averageRating phone');
+        .populate('servian', 'name profileImage averageRating phone role')
+        .populate('customer', 'name profileImage');
 
     res.status(201).json({
         success: true,
@@ -210,6 +211,11 @@ export const createBooking = asyncHandler(async (req, res) => {
 // @access  Private (Customer only)
 export const cancelBooking = asyncHandler(async (req, res) => {
     const { id } = req.params;
+    if (!req.body) {
+        res.status(400);
+        throw new Error('Request body is required');
+    }
+
     const { reason } = req.body;
 
     const booking = await Booking.findOne({ _id: id, customer: req.user.id });
@@ -377,7 +383,58 @@ export const searchServians = asyncHandler(async (req, res) => {
     }
 });
 
+// @desc    Update booking request
+// @route   PUT /api/customer/bookings/:id
+// @access  Private (Customer only)
+export const updateBooking = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const {
+        service,
+        description,
+        scheduledDate,
+        scheduledTime,
+        amount,
+        location,
+        notes
+    } = req.body;
 
+    const booking = await Booking.findOne({ _id: id, customer: req.user.id });
+    if (!booking) {
+        res.status(404);
+        throw new Error('Booking not found');
+    }
+
+    if (!['pending'].includes(booking.status)) {
+        res.status(400);
+        throw new Error('Cannot update booking in current status');
+    }
+
+    // Update fields
+    if (service) booking.service = service;
+    if (description) booking.description = description;
+    if (scheduledDate) booking.scheduledDate = scheduledDate;
+    if (scheduledTime) booking.scheduledTime = scheduledTime;
+    if (amount) booking.amount = amount;
+    if (location) booking.location = { ...booking.location, ...location };
+    if (notes) booking.notes = notes;
+
+    await booking.save();
+
+    // Notify servian about update
+    await Notification.create({
+        user: booking.servian,
+        type: 'booking_updated',
+        title: 'Booking Updated',
+        message: `Customer has updated their booking request`,
+        data: { bookingId: booking._id }
+    });
+
+    res.json({
+        success: true,
+        message: 'Booking updated successfully',
+        data: booking
+    });
+});
 
 // @desc    Get servian details
 // @route   GET /api/customer/servians/:id
@@ -393,7 +450,7 @@ export const getServianDetails = asyncHandler(async (req, res) => {
         throw new Error('Servian not found');
     }
 
-    
+
     const reviews = await Review.find({
         target: id,
         role: 'customer_to_servian'
@@ -403,7 +460,7 @@ export const getServianDetails = asyncHandler(async (req, res) => {
         .sort({ createdAt: -1 })
         .limit(10);
 
-        
+
 
     const servianData = {
         _id: servian._id,
@@ -488,7 +545,7 @@ export const removeFromFavorites = asyncHandler(async (req, res) => {
 // @access  Private (Customer only)
 export const getFavorites = asyncHandler(async (req, res) => {
     const customer = await Customer.findById(req.user.id)
-        .populate('favoriteServians.servian', 'name profileImage averageRating serviceCategory pricing availability');
+        .populate('favoriteServians.servian', 'name profileImage averageRating serviceCategory pricing availability role');
 
     if (!customer) {
         res.status(404);

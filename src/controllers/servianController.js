@@ -440,38 +440,81 @@ export const getReviews = asyncHandler(async (req, res) => {
 // @desc    Get servian bookings
 // @route   GET /api/servian/bookings
 // @access  Private (Servian only)
+// @desc    Get servian bookings (Debug Version)
+// @route   GET /api/servian/bookings
+// @access  Private (Servian only)
 export const getBookings = asyncHandler(async (req, res) => {
+  console.log('=== getBookings Debug Info ===');
+  console.log('req.user:', req.user);
+  console.log('req.user.id:', req.user.id);
+  console.log('req.query:', req.query);
+  
   const { status, page = 1, limit = 10 } = req.query;
 
   const query = { servian: req.user.id };
   if (status) query.status = status;
+  
+  console.log('Query object:', query);
+  console.log('User ID type:', typeof req.user.id);
+  console.log('User ID value:', req.user.id);
 
-  const totalBookings = await Booking.countDocuments(query);
-  const bookings = await Booking.find(query)
-    .populate('customer', 'name phone profileImage') // Populate customer details
-    .sort({ createdAt: -1 })
-    .skip((page - 1) * limit)
-    .limit(Number(limit));
+  try {
+    // First, let's check if any bookings exist at all
+    const allBookingsCount = await Booking.countDocuments({});
+    console.log('Total bookings in database:', allBookingsCount);
+    
+    // Check bookings for this specific servian
+    const servianBookingsCount = await Booking.countDocuments(query);
+    console.log('Bookings for this servian:', servianBookingsCount);
+    
+    // Let's see a few sample bookings to understand the structure
+    const sampleBookings = await Booking.find({}).limit(3).lean();
+    console.log('Sample bookings structure:', JSON.stringify(sampleBookings, null, 2));
+    
+    // Check if servian field is ObjectId or string in your bookings
+    const bookingsWithServian = await Booking.find({ servian: { $exists: true } }).limit(3).lean();
+    console.log('Bookings with servian field:', JSON.stringify(bookingsWithServian, null, 2));
+    
+    const totalBookings = await Booking.countDocuments(query);
+    console.log('Total bookings with query:', totalBookings);
+    
+    const bookings = await Booking.find(query)
+      .populate('customer', 'name phone profileImage') // Populate customer details
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(Number(limit))
+      .lean(); // Add lean() for debugging
+    
+    console.log('Final bookings result:', JSON.stringify(bookings, null, 2));
 
-  const pagination = {
-    currentPage: Number(page),
-    totalPages: Math.ceil(totalBookings / limit),
-    totalBookings,
-    hasNext: page * limit < totalBookings,
-    hasPrev: page > 1
-  };
+    const pagination = {
+      currentPage: Number(page),
+      totalPages: Math.ceil(totalBookings / limit),
+      totalBookings,
+      hasNext: page * limit < totalBookings,
+      hasPrev: page > 1
+    };
 
-  res.json({ success: true, data: { bookings, pagination } });
+    console.log('Pagination:', pagination);
+    console.log('=== End Debug Info ===');
+
+    res.json({ success: true, data: { bookings, pagination } });
+  } catch (error) {
+    console.error('Error in getBookings:', error);
+    throw error;
+  }
 });
 
-// @desc    Update booking status
+
+
+// @desc    Update booking status (with comments)
 // @route   PUT /api/servian/bookings/:id/status
 // @access  Private (Servian only)
 export const updateBookingStatus = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { status, notes } = req.body;
+  const { status, notes, servianComments } = req.body;
 
-  const validStatuses = ['accepted', 'rejected', 'in_progress', 'completed', 'cancelled'];
+  const validStatuses = ['confirmed', 'rejected', 'in_progress', 'completed', 'cancelled'];
   if (!validStatuses.includes(status)) {
     res.status(400);
     throw new Error('Invalid booking status');
@@ -483,8 +526,45 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
     throw new Error('Booking not found');
   }
 
+  // Validate status transitions
+  const currentStatus = booking.status;
+  const validTransitions = {
+    'pending': ['confirmed', 'rejected'],
+    'confirmed': ['in_progress', 'cancelled'],
+    'in_progress': ['completed', 'cancelled'],
+    'completed': [], // No transitions from completed
+    'rejected': [], // No transitions from rejected
+    'cancelled': [] // No transitions from cancelled
+  };
+
+  if (!validTransitions[currentStatus]?.includes(status)) {
+    res.status(400);
+    throw new Error(`Cannot change status from ${currentStatus} to ${status}`);
+  }
+
   booking.status = status;
   if (notes) booking.notes = notes;
+  if (servianComments) booking.servianComments = servianComments;
+
+  // Set status timestamps
+  const now = new Date();
+  switch (status) {
+    case 'confirmed':
+      booking.confirmedAt = now;
+      break;
+    case 'rejected':
+      booking.rejectedAt = now;
+      break;
+    case 'in_progress':
+      booking.startedAt = now;
+      break;
+    case 'completed':
+      booking.completedAt = now;
+      break;
+    case 'cancelled':
+      booking.cancelledAt = now;
+      break;
+  }
 
   await booking.save();
 
@@ -495,12 +575,78 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
   if (status === 'in_progress') servian.updateJobStats('start');
   await servian.save();
 
+  // Create notification for customer
+  // const notificationMessages = {
+  //   confirmed: 'Your booking request has been accepted!',
+  //   rejected: 'Your booking request has been declined',
+  //   in_progress: 'Your service is now in progress',
+  //   completed: 'Your service has been completed',
+  //   cancelled: 'Your booking has been cancelled'
+  // };
+
+  // await Notification.create({
+  //   user: booking.customer,
+  //   type: `booking_${status}`,
+  //   title: `Booking ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+  //   message: notificationMessages[status],
+  //   data: { 
+  //     bookingId: booking._id, 
+  //     servianComments: servianComments || null,
+  //     servianName: servian.name
+  //   }
+  // });
+
   res.json({
     success: true,
     message: `Booking ${status} successfully`,
-    data: { bookingId: id, status, notes: notes || null }
+    data: { 
+      bookingId: id, 
+      status, 
+      servianComments: servianComments || null,
+      notes: notes || null 
+    }
   });
 });
+
+
+// @desc    Add comments to booking
+// @route   PUT /api/servian/bookings/:id/comments
+// @access  Private (Servian only)
+export const addBookingComments = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { servianComments } = req.body;
+
+  if (!servianComments) {
+    res.status(400);
+    throw new Error('Comments are required');
+  }
+
+  const booking = await Booking.findOne({ _id: id, servian: req.user.id });
+  if (!booking) {
+    res.status(404);
+    throw new Error('Booking not found');
+  }
+
+  booking.servianComments = servianComments;
+  await booking.save();
+
+  // Notify customer about comments
+  // await Notification.create({
+  //   user: booking.customer,
+  //   type: 'booking_comment',
+  //   title: 'New Comment on Booking',
+  //   message: `${req.user.name} added comments to your booking`,
+  //   data: { bookingId: booking._id }
+  // });
+
+  res.json({
+    success: true,
+    message: 'Comments added successfully',
+    data: { bookingId: id, servianComments }
+  });
+});
+
+
 
 // @desc    Get notifications
 // @route   GET /api/servian/notifications

@@ -328,5 +328,10 @@ servianSchema.statics.getTopRatedServians = function (category = null, limit = 1
     .limit(limit);
 };
 
+// Create the Servian discriminator model
 const Servian = User.discriminator("servian", servianSchema);
+
+// Ensure the model is properly registered
+console.log('✅ Servian discriminator model registered:', Servian.modelName);
+
 export default Servian;

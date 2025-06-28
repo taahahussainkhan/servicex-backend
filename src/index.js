@@ -4,13 +4,15 @@ import dotenv from "dotenv";
 // import servianRoutes from "./routes/servians.js"; 
 import errorHandling from "./middlewares/errorHandler.js";
 import connectDB from "./config/db.js";
+
+// Import models to ensure they are registered
+import './models/index.js';
+
 import authRoutes from "./routes/authRoutes.js";
 import serviceRoutes from "./routes/serviceRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
  import customerRoutes from "./routes/customerRoutes.js";
  import servianRoutes from "./routes/servianRoutes.js";
-
- 
 
 const app = express();
 dotenv.config()
@@ -31,9 +33,6 @@ app.use('/api/servian',servianRoutes)
 
 app.use(errorHandling);
 //-------------------------------------Test
-
-
-
 
 const PORT = process.env.PORT ;
 

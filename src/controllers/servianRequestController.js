@@ -185,8 +185,8 @@ export const getNearbyRequests = asyncHandler(async (req, res) => {
         }
     })
         .populate('customer', 'name profileImage customerTier averageRating')
-        .populate('bids.servian', 'name profileImage averageRating')
-        .populate('awardedBid', 'name profileImage averageRating');
+        .populate('bids.servian', 'name profileImage averageRating role')
+        .populate('awardedBid', 'name profileImage averageRating role');
 
     // For ACTIVE requests, filter out requests where this servian has already bid
     let availableRequests = requests;
@@ -219,11 +219,11 @@ export const getRequestDetails = asyncHandler(async (req, res) => {
         .populate('customer', 'name profileImage customerTier averageRating totalReviews memberSince phone')
         .populate({
             path: 'bids.servian',
-            select: 'name profileImage averageRating phone'
+            select: 'name profileImage averageRating phone role'
         })
         .populate({
             path: 'awardedBid',
-            select: 'name profileImage averageRating phone'
+            select: 'name profileImage averageRating phone role'
         });
 
         
@@ -362,7 +362,7 @@ export const placeBid = asyncHandler(async (req, res) => {
 
         const updatedRequest = await ServiceRequest.findById(request._id)
             .populate('customer', 'name profileImage customerTier phone')
-            .populate('bids.servian', 'name profileImage averageRating phone');
+            .populate('bids.servian', 'name profileImage averageRating phone role');
 
         res.status(201).json({
             success: true,

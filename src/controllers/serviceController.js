@@ -18,7 +18,7 @@ export const createService = async (req, res) => {
 
 export const getServices = async (req, res) => {
   try {
-    const services = await Service.find({}).populate("servian", "name email");
+    const services = await Service.find({}).populate("servian", "name email role");
     res.json(services);
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch services" });
@@ -28,7 +28,7 @@ export const getServices = async (req, res) => {
 
 export const getServiceById = async (req, res) => {
   try {
-    const service = await Service.findById(req.params.id).populate("servian", "name email");
+    const service = await Service.findById(req.params.id).populate("servian", "name email role");
 
     if (!service) return res.status(404).json({ message: "Service not found" });
 

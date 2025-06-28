@@ -13,7 +13,7 @@ import {
   addPortfolioItem,
   updatePortfolioItem,
   deletePortfolioItem,
-  
+  addBookingComments
 } from '../controllers/servianController.js';
 import {
   getAvailableRequests,
@@ -40,7 +40,7 @@ router.get('/earnings', getEarnings);
 router.get('/reviews', getReviews);
 router.get('/bookings', getBookings);
 router.put('/bookings/:id/status', updateBookingStatus);
-
+router.put('/bookings/:id/comments', addBookingComments);
 // Notifications
 router.get('/notifications', getNotifications);
 router.put('/notifications/:id/read', markNotificationRead);

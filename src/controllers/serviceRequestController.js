@@ -96,8 +96,8 @@ export const getServiceRequests = asyncHandler(async (req, res) => {
 
     const totalRequests = await ServiceRequest.countDocuments(query);
     const requests = await ServiceRequest.find(query)
-        .populate('bids.servian', 'name profileImage averageRating phone serviceCategory')
-        .populate('awardedBid', 'name profileImage phone')
+        .populate('bids.servian', 'name profileImage averageRating phone serviceCategory role')
+        .populate('awardedBid', 'name profileImage phone role')
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(Number(limit));
@@ -130,8 +130,8 @@ export const getServiceRequestDetails = asyncHandler(async (req, res) => {
         customer: req.user.id
     })
         .populate('customer', 'name profileImage customerTier')
-        .populate('bids.servian', 'name profileImage averageRating phone serviceCategory experienceYears')
-        .populate('awardedBid', 'name profileImage phone');
+        .populate('bids.servian', 'name profileImage averageRating phone serviceCategory experienceYears role')
+        .populate('awardedBid', 'name profileImage phone role');
 
     if (!request) {
         res.status(404);
@@ -292,8 +292,8 @@ export const acceptBid = asyncHandler(async (req, res) => {
     }
 
     const updatedRequest = await ServiceRequest.findById(request._id)
-        .populate('bids.servian', 'name profileImage phone')
-        .populate('awardedBid', 'name profileImage phone');
+        .populate('bids.servian', 'name profileImage phone role')
+        .populate('awardedBid', 'name profileImage phone role');
 
     res.json({
         success: true,

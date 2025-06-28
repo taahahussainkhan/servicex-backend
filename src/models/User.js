@@ -188,5 +188,10 @@ userSchema.statics.getPendingUsers = function (filters = {}) {
 userSchema.index({ isVerified: 1, isRejected: 1, __t: 1 });
 userSchema.index({ createdAt: -1 });
 
+// Create the base User model
 const User = mongoose.model("User", userSchema);
+
+// Ensure the model is properly registered
+console.log('✅ Base User model registered:', User.modelName);
+
 export default User;

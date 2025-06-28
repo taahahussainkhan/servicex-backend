@@ -463,4 +463,8 @@ customerSchema.statics.getCustomersByTier = function (tier) {
 // };
 
 const Customer = User.discriminator("customer", customerSchema);
+
+// Ensure the model is properly registered
+console.log('✅ Customer discriminator model registered:', Customer.modelName);
+
 export default Customer;

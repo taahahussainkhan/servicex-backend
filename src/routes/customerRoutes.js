@@ -16,7 +16,8 @@ import {
   unblockServian,
   addAddress,
   updateAddress,
-  deleteAddress
+  deleteAddress,
+  updateBooking
 } from '../controllers/customerController.js';
 import {
   createServiceRequest,
@@ -57,6 +58,7 @@ router.get('/reviews', getReviews);
 // Servians
 router.get('/search/servians', searchServians);
 router.get('/servians/:id', getServianDetails);
+router.put('/bookings/:id', updateBooking);
 
 // Favorites
 router.post('/favorites/:servianId', addToFavorites);
